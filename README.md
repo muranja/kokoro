@@ -7,26 +7,23 @@ An inference library for [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
 ### Usage
 You can run this cell on [Google Colab](https://colab.research.google.com/). [Listen to samples](https://huggingface.co/hexgrad/Kokoro-82M/blob/main/SAMPLES.md).
 ```py
-# 1️⃣ Install kokoro
-!pip install -q kokoro>=0.3.1 soundfile
-# 2️⃣ Install espeak, used for English OOD fallback and some non-English languages
-!apt-get -qq -y install espeak-ng > /dev/null 2>&1
-# 🇪🇸 'e' => Spanish es
-# 🇫🇷 'f' => French fr-fr
-# 🇮🇳 'h' => Hindi hi
-# 🇮🇹 'i' => Italian it
-# 🇧🇷 'p' => Brazilian Portuguese pt-br
+# 1️⃣ Install kokoro and soundfile
+!pip install -q kokoro>=0.3.4 soundfile
 
-# 3️⃣ Initalize a pipeline
+# 2️⃣ Install espeak (used for English OOD fallback and some non-English languages)
+!apt-get -qq -y install espeak-ng > /dev/null 2>&1
+
+# 3️⃣ Import required libraries and initialize the pipeline
 from kokoro import KPipeline
 from IPython.display import display, Audio
 import soundfile as sf
-# 🇺🇸 'a' => American English, 🇬🇧 'b' => British English
-# 🇯🇵 'j' => Japanese: pip install misaki[ja]
-# 🇨🇳 'z' => Mandarin Chinese: pip install misaki[zh]
-pipeline = KPipeline(lang_code='a') # <= make sure lang_code matches voice
+import numpy as np
 
-# This text is for demonstration purposes only, unseen during training
+# Choose a language and voice.
+# For American English, use 'a'; for British English, 'b', etc.
+pipeline = KPipeline(lang_code='a')  # ensure lang_code matches the chosen voice
+
+# This text is for demonstration purposes only
 text = '''
 The sky above the port was the color of television, tuned to a dead channel.
 "It's not like I'm using," Case heard someone say, as he shouldered his way through the crowd around the door of the Chat. "It's like my body's developed this massive drug deficiency."
@@ -36,25 +33,50 @@ These were to have an enormous impact, not only because they were associated wit
 
 [Kokoro](/kˈOkəɹO/) is an open-weight TTS model with 82 million parameters. Despite its lightweight architecture, it delivers comparable quality to larger models while being significantly faster and more cost-efficient. With Apache-licensed weights, [Kokoro](/kˈOkəɹO/) can be deployed anywhere from production environments to personal projects.
 '''
-# text = '「もしおれがただ偶然、そしてこうしようというつもりでなくここに立っているのなら、ちょっとばかり絶望するところだな」と、そんなことが彼の頭に思い浮かんだ。'
-# text = '中國人民不信邪也不怕邪，不惹事也不怕事，任何外國不要指望我們會拿自己的核心利益做交易，不要指望我們會吞下損害我國主權、安全、發展利益的苦果！'
-# text = 'Los partidos políticos tradicionales compiten con los populismos y los movimientos asamblearios.'
-# text = 'Le dromadaire resplendissant déambulait tranquillement dans les méandres en mastiquant de petites feuilles vernissées.'
-# text = 'ट्रांसपोर्टरों की हड़ताल लगातार पांचवें दिन जारी, दिसंबर से इलेक्ट्रॉनिक टोल कलेक्शनल सिस्टम'
-# text = "Allora cominciava l'insonnia, o un dormiveglia peggiore dell'insonnia, che talvolta assumeva i caratteri dell'incubo."
-# text = 'Elabora relatórios de acompanhamento cronológico para as diferentes unidades do Departamento que propõem contratos.'
 
-# 4️⃣ Generate, display, and save audio files in a loop.
+# 4️⃣ Generate audio segments using the pipeline.
+# The split_pattern here splits on one or more newlines.
 generator = pipeline(
-    text, voice='af_heart', # <= change voice here
-    speed=1, split_pattern=r'\n+'
+    text, 
+    voice='af_heart',  # change voice here as needed
+    speed=1, 
+    split_pattern=r'\n+'
 )
+
+# Initialize a list to collect each generated audio segment.
+audios = []
+
+print("Generating individual audio segments...")
 for i, (gs, ps, audio) in enumerate(generator):
-    print(i)  # i => index
-    print(gs) # gs => graphemes/text
-    print(ps) # ps => phonemes
-    display(Audio(data=audio, rate=24000, autoplay=i==0))
-    sf.write(f'{i}.wav', audio, 24000) # save each audio file
+    print(f"\nSegment {i}:")
+    print("Graphemes:", gs)
+    print("Phonemes:", ps)
+    
+    # Display each individual audio segment.
+    display(Audio(data=audio, rate=24000, autoplay=(i == 0)))
+    
+    # Ensure audio is a NumPy array.
+    audio_arr = np.array(audio)
+    print(f"Segment {i} length (samples): {audio_arr.shape[0]}")
+    
+    audios.append(audio_arr)
+
+# Check that we have at least one segment.
+if not audios:
+    raise ValueError("No audio segments were generated.")
+
+# 5️⃣ Concatenate all audio segments into a single array.
+# We're concatenating along the first axis (samples).
+combined_audio = np.concatenate(audios, axis=0)
+print(f"\nCombined audio length (samples): {combined_audio.shape[0]}")
+
+# Display the combined audio for playback.
+display(Audio(data=combined_audio, rate=24000, autoplay=True))
+
+# 6️⃣ Save the combined audio into one file.
+sf.write('combined.wav', combined_audio, 24000)
+print("Combined audio saved as 'combined.wav'")
+
 ```
 
 Under the hood, `kokoro` uses [`misaki`](https://pypi.org/project/misaki/), a G2P library at https://github.com/hexgrad/misaki
